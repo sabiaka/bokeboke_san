@@ -6,6 +6,8 @@ import os
 import numpy as np  # ← 追加！
 from PIL import Image, ImageDraw, ImageFont, ImageTk
 import os
+import threading
+
 
 # ウィンドウ作成
 root = tk.Tk()
@@ -19,27 +21,51 @@ root.iconbitmap("your_icon.ico")
 title_label = tk.Label(root, text="ぼけぼけさん", font=("メイリオ", 24))
 title_label.pack(pady=10)
 
+def show_loading_window():
+    loading_window = tk.Toplevel(root)
+    loading_window.title("読み込み中…")
+    loading_window.geometry("300x100")
+    loading_window.grab_set()  # このウィンドウの操作を優先
+
+    label = tk.Label(loading_window, text="画像読み込み中…")
+    label.pack(pady=10)
+
+    progress_bar = ttk.Progressbar(loading_window, mode="indeterminate")
+    progress_bar.pack(pady=10, padx=20, fill="x")
+    progress_bar.start(10)  # 10msごとに更新
+
+    return loading_window, progress_bar
+
 # ファイル選択ボタン
 def select_files():
     files = filedialog.askopenfilenames(
         title="画像ファイルを選んでね！",
         filetypes=[("画像ファイル", "*.png *.jpg *.jpeg *.bmp")]
     )
+    if not files:
+        return
+
     file_listbox.delete(0, tk.END)
     for file in files:
         file_listbox.insert(tk.END, file)
-    
-    # サムネイルを表示
-    display_thumbnails(files)
-    
-    # 画像が選ばれた場合、選択解除ボタンを有効に
-    deselect_btn.config(state=tk.NORMAL)
 
-    # モード1選択時に保存先ボタンをグレーアウト
-    if save_option.get() == 1:
-        output_select_btn.config(state=tk.DISABLED)
-    else:
-        output_select_btn.config(state=tk.NORMAL)
+    # 読込中ウィンドウ表示
+    loading_window, progress_bar = show_loading_window()
+
+    def load_thumbnails():
+        display_thumbnails(files)  # 時間かかる処理
+        # 読み込み終わったらウィンドウ閉じる
+        loading_window.destroy()
+
+        # ボタンの状態もここで更新
+        deselect_btn.config(state=tk.NORMAL)
+        if save_option.get() == 1:
+            output_select_btn.config(state=tk.DISABLED)
+        else:
+            output_select_btn.config(state=tk.NORMAL)
+
+    # スレッド開始
+    threading.Thread(target=load_thumbnails).start()
 
 # ファイル選択解除ボタン
 def deselect_files():
@@ -235,8 +261,13 @@ def run_blur():
 
 
 
-run_btn = tk.Button(root, text="ぼかす！", command=run_blur)
+def start_blur_thread():
+    thread = threading.Thread(target=run_blur)
+    thread.start()
+
+run_btn = tk.Button(root, text="ぼかす！", command=start_blur_thread)
 run_btn.pack(pady=10)
+
 
 # フッター Made by 押山
 footer_label = tk.Label(root, text="Made by 押山", font=("メイリオ", 9))
